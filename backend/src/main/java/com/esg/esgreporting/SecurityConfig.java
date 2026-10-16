@@ -31,9 +31,10 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(request -> {
                 CorsConfiguration config = new CorsConfiguration();
 
-                config.setAllowedOrigins(
-                    List.of("http://localhost:5173")
-                );
+                config.setAllowedOrigins(List.of(
+    "http://localhost:5173",
+    "https://esg-reporting-nmju.onrender.com"
+));
 
                 config.setAllowedMethods(List.of(
                     "GET",

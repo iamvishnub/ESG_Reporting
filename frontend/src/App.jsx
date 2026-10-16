@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { jsPDF } from 'jspdf';
 import { api, setCredentials, clearCredentials } from './services/api';
 import './App.css';
 const pillars = ['Environmental', 'Social', 'Governance'];
@@ -71,6 +72,88 @@ function App() {
     } finally {
       setReportLoading(false);
     }
+  };
+  const downloadApprovedReport = () => {
+    const reportMetrics = approvedMetrics.filter((metric) =>
+      selectedPeriod === 'All' || String(metric.reportingPeriod || '') === selectedPeriod
+    );
+
+    if (reportMetrics.length === 0) {
+      setReportError('There are no approved metrics for the selected reporting period. Refresh reports after approving metrics.');
+      return;
+    }
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 16;
+    const usableWidth = pageWidth - margin * 2;
+    let y = 18;
+
+    const addPageIfNeeded = (height = 8) => {
+      if (y + height > pageHeight - 16) {
+        doc.addPage();
+        y = 18;
+      }
+    };
+    const addText = (text, options = {}) => {
+      const { size = 10, bold = false, gap = 2 } = options;
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setFontSize(size);
+      const lines = doc.splitTextToSize(String(text ?? '—'), usableWidth);
+      addPageIfNeeded(lines.length * (size * 0.42) + gap);
+      doc.text(lines, margin, y);
+      y += lines.length * (size * 0.42) + gap;
+    };
+
+    doc.setTextColor(23, 82, 67);
+    addText('ESG REPORT', { size: 22, bold: true, gap: 3 });
+    doc.setTextColor(40, 55, 50);
+    addText(`Reporting period: ${selectedPeriod === 'All' ? 'All available periods' : selectedPeriod}`, { size: 11, bold: true });
+    addText(`Generated on: ${new Date().toLocaleString()}`, { size: 9, gap: 5 });
+    addText('Purpose and scope', { size: 13, bold: true, gap: 3 });
+    addText('This report summarizes approved ESG metric records available in this application for the selected reporting period. Only records with Approved review status are included. Values, units, sources and methods are reproduced from the saved metric records.', { gap: 4 });
+    addText('Environmental, Social and Governance', { size: 13, bold: true, gap: 3 });
+    addText('Environmental covers topics such as emissions, energy, water and waste. Social covers workforce, training and workplace safety. Governance covers board independence, anti-corruption training and ethics reporting. Carbon data alone does not represent all three ESG pillars.', { gap: 4 });
+
+    const pillarsForReport = ['Environmental', 'Social', 'Governance'];
+    pillarsForReport.forEach((pillar) => {
+      const pillarMetrics = reportMetrics.filter((metric) => metric.pillar === pillar);
+      addPageIfNeeded(14);
+      doc.setFillColor(232, 242, 237);
+      doc.roundedRect(margin, y - 4, usableWidth, 9, 1.5, 1.5, 'F');
+      doc.setTextColor(23, 82, 67);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text(`${pillar} (${pillarMetrics.length} approved metric${pillarMetrics.length === 1 ? '' : 's'})`, margin + 3, y + 2);
+      y += 12;
+      doc.setTextColor(40, 55, 50);
+
+      if (pillarMetrics.length === 0) {
+        addText('No approved metrics recorded for this pillar in the selected period.', { gap: 4 });
+        return;
+      }
+
+      pillarMetrics.forEach((metric, index) => {
+        addPageIfNeeded(32);
+        addText(`${index + 1}. ${metric.name || 'Unnamed metric'}`, { size: 11, bold: true, gap: 2 });
+        addText(`Result: ${metric.value === null || metric.value === undefined ? 'Unavailable' : `${metric.value} ${metric.unit || ''}`.trim()}`);
+        addText(`Reporting period: ${metric.reportingPeriod || 'Not specified'} | Data status: ${metric.dataStatus || 'Not specified'} | Review status: ${metric.reviewStatus || 'Approved'}`);
+        addText(`Method / formula: ${metric.method || 'Not provided'}`);
+        addText(`Data source: ${metric.source || 'Not provided'} | Responsible owner: ${metric.owner || 'Not provided'}`);
+        if (metric.assumptions) addText(`Assumptions / exclusions: ${metric.assumptions}`);
+        y += 2;
+      });
+    });
+
+    addPageIfNeeded(28);
+    addText('Interpretation and limitations', { size: 13, bold: true, gap: 3 });
+    addText('This report reflects the approved metric records available in the prototype. Missing metrics are not interpreted as zero. The application does not currently attach evidence files to each metric or store immutable generated report versions; therefore, this PDF is a generated snapshot of the approved records at download time. Verify reporting boundaries, units, calculation methods and source records before external publication. This prototype does not by itself establish compliance with a reporting standard.', { gap: 4 });
+    addText(`Approved metrics included: ${reportMetrics.length}`, { size: 10, bold: true, gap: 2 });
+
+    const safePeriod = selectedPeriod === 'All' ? 'all-periods' : selectedPeriod.replace(/[^a-zA-Z0-9_-]/g, '-');
+    doc.save(`ESG-Report-${safePeriod}.pdf`);
+    setReportError('');
   };
   useEffect(() => {
     if (isLoggedIn) loadMetrics();
@@ -334,6 +417,7 @@ if (editingId !== null) {
           <a href="#dashboard" className="nav-item active">
             Dashboard
           </a>
+          <a href="#esg-understanding" className="nav-item">ESG Understanding</a>
           <a href="#metrics" className="nav-item">
             ESG Metrics
           </a>
@@ -390,6 +474,62 @@ if (editingId !== null) {
             <a className="primary-button dashboard-link" href="#add-metric">+ Add Metric</a>
           )}
         </section>
+
+        <section id="esg-understanding" style={{ margin: '24px 0', padding: '24px', background: '#ffffff', border: '1px solid #e0e8e4', borderRadius: '16px', boxShadow: '0 4px 16px rgba(24, 43, 40, 0.04)' }}>
+          <div style={{ marginBottom: '18px' }}>
+            <p className="eyebrow">ASSIGNMENT DESIGN NOTE</p>
+            <h2 style={{ margin: '0 0 8px', color: '#182b28' }}>Understanding ESG Reporting</h2>
+            <p style={{ margin: 0, color: '#52645e', lineHeight: 1.7 }}>
+              Environmental, Social and Governance (ESG) reporting helps stakeholders understand an organisation’s environmental impact, treatment of people, and accountability in decision-making. Carbon emissions are important, but carbon reporting alone does not describe workforce practices, workplace safety, board independence or ethical conduct.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+            <article style={{ padding: '18px', borderRadius: '12px', background: '#eff8f2', borderTop: '4px solid #25845a' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#176b45' }}>Environmental</h3>
+              <p style={{ margin: '0 0 10px', color: '#40564b', lineHeight: 1.6 }}>Measures how an organisation affects the natural environment.</p>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#40564b', lineHeight: 1.7 }}>
+                <li>Scope 1, Scope 2 and Scope 3 emissions (kg or tonnes CO₂e)</li>
+                <li>Energy consumption by source (common unit such as kWh)</li>
+                <li>Water withdrawal (m³)</li>
+                <li>Total waste, recycled waste and recycling rate (%)</li>
+              </ul>
+            </article>
+            <article style={{ padding: '18px', borderRadius: '12px', background: '#eff6ff', borderTop: '4px solid #3478bd' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#235b95' }}>Social</h3>
+              <p style={{ margin: '0 0 10px', color: '#40516a', lineHeight: 1.6 }}>Looks at how the organisation treats and supports people.</p>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#40516a', lineHeight: 1.7 }}>
+                <li>Workforce at period start and end</li>
+                <li>Employee departures and turnover (%)</li>
+                <li>Total training hours and hours per employee</li>
+                <li>Workplace injury incidents</li>
+              </ul>
+            </article>
+            <article style={{ padding: '18px', borderRadius: '12px', background: '#faf3ff', borderTop: '4px solid #8b5bb5' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#704092' }}>Governance</h3>
+              <p style={{ margin: '0 0 10px', color: '#5b4b68', lineHeight: 1.6 }}>Focuses on ethical conduct, oversight and transparent accountability.</p>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#5b4b68', lineHeight: 1.7 }}>
+                <li>Total board members and independent members</li>
+                <li>Independent board percentage (%)</li>
+                <li>Eligible people and anti-corruption training completion (%)</li>
+                <li>Ethics cases, with open/closed status reported in aggregate</li>
+              </ul>
+            </article>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginTop: '14px' }}>
+            <div style={{ padding: '16px', borderRadius: '12px', background: '#f7f9f8' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#243b36', fontSize: '16px' }}>Supply-chain context</h3>
+              <p style={{ margin: 0, color: '#52645e', lineHeight: 1.7 }}>Suppliers, manufacturers, logistics providers, distributors, wholesalers and retailers can contribute relevant data. Each stakeholder’s records remain distinct. Supplier workforce or board figures must not be added to the reporting organisation’s own totals; supplier disclosures are shown separately unless a metric explicitly defines otherwise.</p>
+            </div>
+            <div style={{ padding: '16px', borderRadius: '12px', background: '#f7f9f8' }}>
+              <h3 style={{ margin: '0 0 8px', color: '#243b36', fontSize: '16px' }}>How to interpret the data</h3>
+              <p style={{ margin: 0, color: '#52645e', lineHeight: 1.7 }}>Each metric should identify its unit, formula or method, source, reporting period, reporting boundary and responsible owner. Evidence supports a claim but does not by itself verify accuracy. Measured and estimated values must be distinguished; unavailable or not-applicable data needs a reason and must not be treated as zero. Review status should remain visible.</p>
+            </div>
+          </div>
+          <p style={{ margin: '16px 0 0', paddingTop: '14px', borderTop: '1px solid #e5ece8', color: '#64746f', fontSize: '13px', lineHeight: 1.6 }}>
+            Reporting completeness is different from ESG performance. This prototype supports ESG data collection and review; it should not be described as compliant with a reporting standard unless that mapping has been verified. Organisation-level emissions inventory and product footprint are different measures and must not be substituted for one another.
+          </p>
+        </section>
+
         {error && (
           <div className="alert error-alert" role="alert">
             {error}
@@ -815,14 +955,25 @@ if (editingId !== null) {
                 Summary and metrics approved for reporting.
               </p>
             </div>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={loadReports}
-              disabled={reportLoading}
-            >
-              {reportLoading ? 'Loading...' : 'Refresh Reports'}
-            </button>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={loadReports}
+                disabled={reportLoading}
+              >
+                {reportLoading ? 'Loading...' : 'Refresh Reports'}
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={downloadApprovedReport}
+                disabled={reportLoading || approvedMetrics.length === 0}
+                title="Download a PDF containing approved metrics for the selected period"
+              >
+                Download Report PDF
+              </button>
+            </div>
           </div>
           {reportError && (
             <div className="alert error-alert" role="alert">
