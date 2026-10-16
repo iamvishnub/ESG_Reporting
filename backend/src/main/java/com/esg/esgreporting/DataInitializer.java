@@ -33,19 +33,19 @@ public class DataInitializer {
     }
 
     private void createUser(
-            AppUserRepository repository,
-            PasswordEncoder encoder,
-            String username,
-            String password,
-            String role) {
+        AppUserRepository repository,
+        PasswordEncoder encoder,
+        String username,
+        String password,
+        String role) {
 
-        if (repository.findByUsername(username).isEmpty()) {
-            AppUser user = new AppUser();
-            user.setUsername(username);
-            user.setPassword(encoder.encode(password));
-            user.setRole(role);
+    AppUser user = repository.findByUsername(username)
+            .orElseGet(AppUser::new);
 
-            repository.save(user);
-        }
-    }
+    user.setUsername(username);
+    user.setPassword(encoder.encode(password));
+    user.setRole(role);
+
+    repository.save(user);
+}
 }
